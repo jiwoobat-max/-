@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>화학 및 동적 평형 인터랙티브 시뮬레이터</title>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            apple: {
+              black: '#000000',
+              darkGray: '#1C1C1E',
+              cardBg: 'rgba(28, 28, 30, 0.75)',
+              border: 'rgba(255, 255, 255, 0.08)',
+              blue: '#0A84FF',
+              green: '#30D158',
+              orange: '#FF9F0A',
+              red: '#FF453A',
+              textGray: '#8E8E93',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #09090B;
+      color: #F4F4F5;
+      font-family: 'Inter', -apple-system, sans-serif;
+      overflow-x: hidden;
+    }
+    .glass-card {
+      background: rgba(28, 28, 30, 0.75);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+    .text-gradient {
+      background: linear-gradient(135deg, #FFFFFF 0%, #A1A1AA 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    /* Custom Slider Styles */
+    input[type="range"]::-webkit-slider-runnable-track {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 9999px;
+      height: 6px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      background: #FFFFFF;
+      border: 2px solid #0A84FF;
+      border-radius: 50%;
+      height: 18px;
+      width: 18px;
+      margin-top: -6px;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(10, 132, 255, 0.5);
+      transition: transform 0.1s ease, background-color 0.1s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    /* Hide scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #09090B;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #27272A;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3F3F46;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between py-6 px-4 md:px-8">
+
+  <!-- Header -->
+  <header class="max-w-7xl mx-auto w-full flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+    <div class="text-center md:text-left">
+      <div class="flex items-center gap-2 justify-center md:justify-start">
+        <span class="inline-flex items-center justify-center p-2 rounded-xl bg-apple-blue bg-opacity-10 text-apple-blue border border-apple-blue border-opacity-20">
+          <i data-lucide="atom" class="w-6 h-6"></i>
+        </span>
+        <h1 class="text-2xl md:text-3xl font-bold font-display tracking-tight text-gradient">평형(Equilibrium) 시뮬레이터</h1>
+      </div>
+      <p class="text-xs md:text-sm text-apple-textGray mt-1">고등학교 2학년 화학 과정을 위한 동적 평형 & 화학 평형 대화형 실험실</p>
+    </div>
+
+    <!-- Tab Buttons (Apple style pill) -->
+    <div class="flex p-1 bg-zinc-900 rounded-full border border-zinc-800">
+      <button id="tab-dynamic" onclick="switchTab('dynamic')" class="px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 bg-apple-blue text-white shadow-lg">
+        동적 평형 (증발과 응축)
+      </button>
+      <button id="tab-chemical" onclick="switchTab('chemical')" class="px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 text-apple-textGray hover:text-white">
+        화학 평형 (NO₂ ⇌ N₂O₄)
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="max-w-7xl mx-auto w-full flex-grow grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6 items-stretch">
+    
+    <!-- Left Column: Simulation Canvas Container (7 cols) -->
+    <div class="lg:col-span-7 flex flex-col gap-4">
+      <div class="glass-card rounded-3xl p-5 flex flex-col flex-grow min-h-[400px] md:min-h-[500px]">
+        <!-- Simulation Header -->
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-apple-blue animate-pulse"></span>
+            <h2 id="sim-title" class="font-semibold text-lg">밀폐 용기 시뮬레이션</h2>
+          </div>
+          <div class="flex gap-2">
+            <!-- Preset Buttons for Chemical Tab (Hidden in Dynamic Tab) -->
+            <div id="chemical-presets" class="hidden flex gap-1 bg-zinc-900 p-0.5 rounded-lg border border-zinc-800 text-xs">
+              <button onclick="setChemicalPreset('reactants')" id="preset-reactants" class="px-3 py-1.5 rounded-md font-medium text-white bg-zinc-800">반응물만 (NO<sub>2</sub>)</button>
+              <button onclick="setChemicalPreset('products')" id="preset-products" class="px-3 py-1.5 rounded-md font-medium text-zinc-400 hover:text-white">생성물만 (N<sub>2</sub>O<sub>4</sub>)</button>
+              <button onclick="setChemicalPreset('mixed')" id="preset-mixed" class="px-3 py-1.5 rounded-md font-medium text-zinc-400 hover:text-white">혼합 상태 (랜덤)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Canvas Container -->
+        <div class="relative flex-grow bg-black bg-opacity-40 rounded-2xl border border-zinc-800 overflow-hidden flex flex-col justify-center items-center">
+          <!-- Canvas Background Color (for NO2 concentration visual representation) -->
+          <div id="canvas-overlay" class="absolute inset-0 transition-all duration-300 pointer-events-none opacity-0" style="background-color: rgba(139, 69, 19, 0);"></div>
+          
+          <canvas id="simCanvas" class="w-full h-full block z-10"></canvas>
+
+          <!-- Dynamic Equilibrium labels in canvas -->
+          <div id="dynamic-labels" class="absolute inset-x-0 top-4 px-6 flex justify-between text-xs text-zinc-400 z-20 pointer-events-none">
+            <div class="flex items-center gap-1.5 bg-black bg-opacity-60 px-3 py-1.5 rounded-full border border-zinc-800">
+              <span class="w-2 h-2 rounded-full bg-blue-400"></span>기체 수증기 (H₂O)
+            </div>
+            <div class="flex items-center gap-1.5 bg-black bg-opacity-60 px-3 py-1.5 rounded-full border border-zinc-800">
+              <span class="w-2 h-2 rounded-full bg-blue-600"></span>액체 물 (H₂O)
+            </div>
+          </div>
+          
+          <!-- Chemical Equilibrium labels in canvas -->
+          <div id="chemical-labels" class="hidden absolute inset-x-0 top-4 px-6 flex justify-between text-xs text-zinc-400 z-20 pointer-events-none">
+            <div class="flex items-center gap-1.5 bg-black bg-opacity-60 px-3 py-1.5 rounded-full border border-zinc-800">
+              <span class="w-2.5 h-2.5 rounded-full bg-orange-700 border border-orange-500"></span>반응물 NO<sub>2</sub> (적갈색 입자)
+            </div>
+            <div class="flex items-center gap-1.5 bg-black bg-opacity-60 px-3 py-1.5 rounded-full border border-zinc-800">
+              <span class="w-4 h-2.5 rounded-full bg-cyan-900 border border-cyan-400"></span>생성물 N<sub>2</sub>O<sub>4</sub> (무색 결합체)
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Dashboard & Graphs (5 cols) -->
+    <div class="lg:col-span-5 flex flex-col gap-6">
+      
+      <!-- Prediction Quiz Card (Highlighted when reset) -->
+      <div id="prediction-quiz-card" class="glass-card rounded-3xl p-5 border-l-4 border-l-apple-blue transition-all duration-300">
+        <div class="flex items-start gap-3">
+          <div class="p-2 rounded-xl bg-apple-blue bg-opacity-10 text-apple-blue">
+            <i data-lucide="help-circle" class="w-5 h-5"></i>
+          </div>
+          <div class="flex-grow">
+            <h3 class="font-semibold text-sm text-white">생각해 보기: 평형 이동 예측 퀴즈</h3>
+            <p class="text-xs text-apple-textGray mt-1">이 조건에서 재생을 시작하면, 계는 어떤 평형 이동을 나타낼까요?</p>
+            
+            <!-- Quiz Options -->
+            <div class="grid grid-cols-1 gap-2 mt-4" id="quiz-options">
+              <button onclick="submitPrediction('forward')" class="w-full text-left px-4 py-2.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-xs font-medium transition-all duration-200 flex justify-between items-center">
+                <span>정반응이 우세하게 일어남 (우향 이동)</span>
+                <i data-lucide="arrow-right" class="w-4 h-4 text-apple-blue"></i>
+              </button>
+              <button onclick="submitPrediction('reverse')" class="w-full text-left px-4 py-2.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-xs font-medium transition-all duration-200 flex justify-between items-center">
+                <span>역반응이 우세하게 일어남 (좌향 이동)</span>
+                <i data-lucide="arrow-left" class="w-4 h-4 text-apple-red"></i>
+              </button>
+              <button onclick="submitPrediction('already')" class="w-full text-left px-4 py-2.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-xs font-medium transition-all duration-200 flex justify-between items-center">
+                <span>이미 동적 평형 상태임 (변화 없음)</span>
+                <i data-lucide="refresh-cw" class="w-4 h-4 text-apple-green"></i>
+              </button>
+            </div>
+
+            <!-- Quiz Result & Explanation (Hidden initially) -->
+            <div id="quiz-result" class="hidden mt-3 p-3 bg-zinc-900 bg-opacity-60 rounded-xl border border-zinc-800">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span id="quiz-badge" class="px-2 py-0.5 rounded text-[10px] font-bold">판단 대기 중</span>
+                <span id="quiz-user-choice" class="text-xs text-zinc-300 font-medium">선택: -</span>
+              </div>
+              <p id="quiz-explanation" class="text-[11px] text-apple-textGray leading-relaxed"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-Time Metrics Dashboard -->
+      <div class="glass-card rounded-3xl p-5 flex flex-col gap-4">
+        <h3 class="font-semibold text-sm flex items-center gap-2">
+          <i data-lucide="gauge" class="w-4 h-4 text-apple-textGray"></i>
+          실시간 상태 계측
+        </h3>
+        
+        <div class="grid grid-cols-2 gap-4">
+          <!-- Metric 1: Concentration -->
+          <div class="p-3 bg-zinc-900 bg-opacity-40 rounded-2xl border border-zinc-800">
+            <span id="label-reactant-conc" class="text-[11px] text-apple-textGray block mb-1">물 분자 수 (액체)</span>
+            <div class="flex items-baseline gap-1">
+              <span id="val-reactant-conc" class="text-xl font-bold font-display">80</span>
+              <span class="text-[10px] text-zinc-500">개</span>
+            </div>
+          </div>
+          <div class="p-3 bg-zinc-900 bg-opacity-40 rounded-2xl border border-zinc-800">
+            <span id="label-product-conc" class="text-[11px] text-apple-textGray block mb-1">수증기 분자 수 (기체)</span>
+            <div class="flex items-baseline gap-1">
+              <span id="val-product-conc" class="text-xl font-bold font-display">0</span>
+              <span class="text-[10px] text-zinc-500">개</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dynamic rates compare bar -->
+        <div class="flex flex-col gap-2 p-3 bg-zinc-900 bg-opacity-40 rounded-2xl border border-zinc-800">
+          <div class="flex justify-between items-center text-xs">
+            <span id="label-forward-rate" class="text-apple-blue font-medium flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-apple-blue"></span>증발 속도: <span id="val-forward-rate" class="font-bold">3.00</span>
+            </span>
+            <span id="label-reverse-rate" class="text-apple-red font-medium flex items-center gap-1">
+              응축 속도: <span id="val-reverse-rate" class="font-bold">0.00</span><span class="w-1.5 h-1.5 rounded-full bg-apple-red"></span>
+            </span>
+          </div>
+          <!-- Rate bar slider visual -->
+          <div class="h-2 w-full bg-zinc-800 rounded-full overflow-hidden flex relative">
+            <div id="rate-bar-forward" class="h-full bg-apple-blue transition-all duration-100" style="width: 50%"></div>
+            <div id="rate-bar-reverse" class="h-full bg-apple-red transition-all duration-100" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Equilibrium Status & Reaction Quotient -->
+        <div class="flex justify-between items-center pt-2 border-t border-zinc-800">
+          <div id="status-quotient-box" class="flex flex-col gap-1 invisible">
+            <span class="text-[10px] text-apple-textGray">반응 지수(Q) vs 평형 상수(K)</span>
+            <div class="flex items-center gap-2">
+              <span id="val-reaction-quotient" class="text-xs font-semibold font-display text-zinc-300">Q = 0.0000</span>
+              <span id="badge-qk-compare" class="px-2 py-0.5 rounded-full text-[9px] font-bold">Q < K (정반응 우세)</span>
+            </div>
+          </div>
+          
+          <div id="status-badge" class="px-4 py-2 rounded-2xl bg-apple-orange bg-opacity-10 border border-apple-orange border-opacity-20 text-apple-orange text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+            <span class="w-1.5 h-1.5 rounded-full bg-apple-orange animate-ping"></span>
+            <span>반응 진행 중</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Real-time Trend Graphs Card (Full Width) -->
+    <div class="lg:col-span-12 glass-card rounded-3xl p-5 flex flex-col min-h-[300px]">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="font-semibold text-sm flex items-center gap-2 text-zinc-200">
+          <i data-lucide="trending-up" class="w-4 h-4 text-apple-textGray"></i>
+          실시간 반응 분석 그래프 (농도와 반응 속도 실시간 대비)
+        </h3>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full h-[200px]">
+        <div class="relative h-full w-full">
+          <canvas id="trendChartConc"></canvas>
+        </div>
+        <div class="relative h-full w-full">
+          <canvas id="trendChartRate"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Bottom Timeline & Time Scrubber Control (Apple Style Glass Container) -->
+  <footer class="max-w-7xl mx-auto w-full glass-card rounded-3xl p-4 md:p-6 flex flex-col gap-4">
+    <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+      
+      <!-- Timeline Controls -->
+      <div class="flex items-center gap-3 w-full md:w-auto justify-center">
+        <!-- Reset Button -->
+        <button onclick="resetSimulation()" class="p-2.5 rounded-full hover:bg-zinc-800 active:scale-95 transition-all text-zinc-400 hover:text-white" title="처음으로">
+          <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+        </button>
+        <!-- Play / Pause Button -->
+        <button id="btn-play-pause" onclick="togglePlay()" class="p-3.5 bg-white text-black hover:bg-zinc-200 active:scale-95 transition-all rounded-full flex justify-center items-center shadow-lg" title="재생">
+          <i id="play-icon" data-lucide="play" class="w-5 h-5 fill-current"></i>
+        </button>
+        <!-- Speed Button -->
+        <button id="btn-speed" onclick="toggleSpeed()" class="px-3.5 py-2 rounded-full hover:bg-zinc-800 active:scale-95 text-xs font-semibold border border-zinc-800 text-zinc-300 transition-all">
+          1.0x
+        </button>
+      </div>
+
+      <!-- Interactive Scrubber Timeline (Center) -->
+      <div class="flex-grow flex items-center gap-4 w-full px-2">
+        <span class="text-xs font-display font-medium text-apple-textGray select-none w-10 text-right">0.0s</span>
+        <div class="relative flex-grow flex items-center">
+          <input type="range" id="timeline-scrubber" min="0" max="30" step="0.1" value="0" oninput="scrubTime(this.value)" class="w-full h-6 appearance-none bg-transparent outline-none z-10">
+          
+          <!-- Track indicators for equilibrium -->
+          <div id="equilibrium-marker" class="absolute h-6 w-0.5 bg-apple-green bg-opacity-80 z-20 pointer-events-none hidden" title="평형 도달 시점" style="left: 50%">
+            <div class="absolute -top-4 -translate-x-1/2 text-[9px] text-apple-green bg-black bg-opacity-80 px-1 py-0.5 rounded border border-apple-green border-opacity-30 whitespace-nowrap">평형 도달 예측</div>
+          </div>
+          
+          <div class="absolute inset-0 flex items-center pointer-events-none">
+            <div class="h-1.5 w-full bg-zinc-800 rounded-full"></div>
+          </div>
+        </div>
+        <span id="max-time-label" class="text-xs font-display font-medium text-apple-textGray select-none w-10">30.0s</span>
+      </div>
+
+      <!-- Current Time Indicator -->
+      <div class="bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-2xl flex items-center gap-2 select-none w-full md:w-32 justify-center shadow-inner">
+        <span class="text-[10px] text-apple-textGray uppercase font-bold tracking-wider">시간</span>
+        <span id="current-time-val" class="font-display font-bold text-sm text-white">0.0s</span>
+      </div>
+      
+    </div>
+  </footer>
+
+  <script>
+    // Global Constants and States
+    let currentTab = 'dynamic'; // 'dynamic' or 'chemical'
+    let isPlaying = false;
+    let playSpeed = 1.0; // 0.5, 1.0, 2.0
+    let currentTime = 0.0;
+    const maxTime = 30.0;
+    const dt = 0.1; // mathematical calculation step
+    
+    // Canvas setup
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    let animationFrameId = null;
+
+    // Chart.js objects
+    let chartConc = null;
+    let chartRate = null;
+
+    // Math trajectory data
+    let trajectoryData = []; // precalculated data points
+    let currentChemicalPreset = 'reactants'; // reactants, products, mixed
+    let initReactantVal = 80.0;
+    let initProductVal = 0.0;
+    
+    // Prediction state
+    let userPrediction = null; // 'forward', 'reverse', 'already'
+    let hasPredicted = false;
+    let hasCheckedPrediction = false;
+
+    // Simulation parameters
+    const DYNAMIC_PARAMS = {
+      k_evap: 3.0,      // constant evaporation rate
+      k_cond_coef: 0.15, // condensation rate constant
+      G_eq: 20.0,       // equilibrium gas count
+      W_max: 80.0       // initial liquid molecules representing container capacity
+    };
+
+    const CHEMICAL_PARAMS = {
+      k_f: 0.002,       // forward rate constant
+      k_r: 0.1,         // reverse rate constant
+      N_total: 80,      // total N atoms (conserved: NO2_count + 2 * N2O4_count)
+      K: 0.01989        // Equilibrium constant K = N2O4_eq / (NO2_eq^2)
+    };
+
+    // Initialize Page
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+      
+      // Initial setups
+      calculateTrajectories();
+      initChart();
+      resetSimulation();
+      
+      // Run particle draw loop
+      particleLoop();
+    });
+
+    function resizeCanvas() {
+      // Set canvas dimension based on container
+      const container = canvas.parentElement;
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+    }
+
+    // Switch Tabs
+    function switchTab(tab) {
+      if (currentTab === tab) return;
+      currentTab = tab;
+      
+      // Update UI buttons styling
+      const dBtn = document.getElementById('tab-dynamic');
+      const cBtn = document.getElementById('tab-chemical');
+      
+      if (tab === 'dynamic') {
+        dBtn.className = "px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 bg-apple-blue text-white shadow-lg";
+        cBtn.className = "px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 text-apple-textGray hover:text-white";
+        document.getElementById('sim-title').textContent = "물-수증기 동적 평형 실험";
+        document.getElementById('chemical-presets').classList.add('hidden');
+        document.getElementById('dynamic-labels').classList.remove('hidden');
+        document.getElementById('chemical-labels').classList.add('hidden');
+        
+        // Hide/Show labels in dashboard
+        document.getElementById('label-reactant-conc').innerHTML = "물 분자 수 (액체)";
+        document.getElementById('label-product-conc').innerHTML = "수증기 분자 수 (기체)";
+        document.getElementById('label-forward-rate').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-apple-blue"></span>증발 속도: <span id="val-forward-rate" class="font-bold">3.00</span>';
+        document.getElementById('label-reverse-rate').innerHTML = '응축 속도: <span id="val-reverse-rate" class="font-bold">0.00</span><span class="w-1.5 h-1.5 rounded-full bg-apple-red"></span>';
+        document.getElementById('status-quotient-box').classList.add('invisible');
+      } else {
+        cBtn.className = "px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 bg-apple-blue text-white shadow-lg";
+        dBtn.className = "px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 text-apple-textGray hover:text-white";
+        document.getElementById('sim-title').textContent = "2NO₂ ⇌ N₂O₄ 화학 평형 실험";
+        document.getElementById('chemical-presets').classList.remove('hidden');
+        document.getElementById('dynamic-labels').classList.add('hidden');
+        document.getElementById('chemical-labels').classList.remove('hidden');
+        
+        // Labels in dashboard
+        document.getElementById('label-reactant-conc').innerHTML = "반응물 NO<sub>2</sub> 분자 수";
+        document.getElementById('label-product-conc').innerHTML = "생성물 N<sub>2</sub>O<sub>4</sub> 분자 수";
+        document.getElementById('label-forward-rate').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-apple-blue"></span>정반응 속도: <span id="val-forward-rate" class="font-bold">12.80</span>';
+        document.getElementById('label-reverse-rate').innerHTML = '역반응 속도: <span id="val-reverse-rate" class="font-bold">0.00</span><span class="w-1.5 h-1.5 rounded-full bg-apple-red"></span>';
+        document.getElementById('status-quotient-box').classList.remove('invisible');
+      }
+
+      // Re-calculate math models for new tab/preset and update
+      calculateTrajectories();
+      updateEquilibriumMarker();
+      resetSimulation();
+      updateChartData();
+    }
+
+    // Set presets for chemical equilibrium
+    function setChemicalPreset(preset) {
+      if (preset !== 'mixed' && currentChemicalPreset === preset) return;
+      currentChemicalPreset = preset;
+      
+      const buttons = ['reactants', 'products', 'mixed'];
+      buttons.forEach(b => {
+        const btn = document.getElementById(`preset-${b}`);
+        if (b === preset) {
+          btn.className = "px-3 py-1.5 rounded-md font-medium text-white bg-zinc-800 shadow-sm";
+        } else {
+          btn.className = "px-3 py-1.5 rounded-md font-medium text-zinc-400 hover:text-white";
+        }
+      });
+
+      if (preset === 'reactants') {
+        initReactantVal = CHEMICAL_PARAMS.N_total;
+        initProductVal = 0.0;
+      } else if (preset === 'products') {
+        initReactantVal = 0.0;
+        initProductVal = CHEMICAL_PARAMS.N_total / 2;
+      } else {
+        // Mixed state - randomize N2O4 from 5 to 35 (so NO2 is between 10 and 70)
+        initProductVal = 5 + Math.floor(Math.random() * 31);
+        initReactantVal = CHEMICAL_PARAMS.N_total - 2 * initProductVal;
+      }
+
+      calculateTrajectories();
+      updateEquilibriumMarker();
+      resetSimulation();
+      updateChartData();
+    }
+
+    // Update equilibrium marker placement on timeline slider
+    function updateEquilibriumMarker() {
+      const marker = document.getElementById('equilibrium-marker');
+      let eqTime = -1;
+      
+      // Search for when rates are equal within 1% error
+      for (let i = 0; i < trajectoryData.length; i++) {
+        const pt = trajectoryData[i];
+        const diff = Math.abs(pt.v_f - pt.v_r);
+        const maxRate = Math.max(pt.v_f, pt.v_r);
+        if (diff / (maxRate || 1) < 0.015) {
+          eqTime = pt.time;
+          break;
+        }
+      }
+
+      if (eqTime >= 0 && eqTime < maxTime) {
+        const percent = (eqTime / maxTime) * 100;
+        marker.style.left = `${percent}%`;
+        marker.classList.remove('hidden');
+      } else {
+        marker.classList.add('hidden');
+      }
+    }
+
+    // Mathematical calculations (ODE solvers)
+    function calculateTrajectories() {
+      trajectoryData = [];
+      let t = 0.0;
+      
+      if (currentTab === 'dynamic') {
+        // G(t) = G_eq + (G_0 - G_eq) * e^(-k_cond * t)
+        // G_0 = 0.0 (Starting empty/dry)
+        const G_0 = 0.0;
+        const G_eq = DYNAMIC_PARAMS.G_eq;
+        const k = DYNAMIC_PARAMS.k_cond_coef;
+        
+        while (t <= maxTime + 0.01) {
+          let G = G_eq + (G_0 - G_eq) * Math.exp(-k * t);
+          let W = DYNAMIC_PARAMS.W_max - G;
+          let v_f = DYNAMIC_PARAMS.k_evap;
+          let v_r = k * G;
+          
+          // Clamp to exact equilibrium when extremely close to avoid minor floating-point difference at the end
+          if (v_f - v_r < 0.05) {
+            v_r = v_f;
+            G = G_eq;
+            W = DYNAMIC_PARAMS.W_max - G_eq;
+          }
+          
+          trajectoryData.push({
+            time: Math.round(t * 10) / 10,
+            reactant: W, // liquid
+            product: G,   // gas
+            v_f: v_f,
+            v_r: v_r,
+            quotient: 0 // not applicable
+          });
+          t += dt;
+        }
+      } else {
+        // Chemical: 2NO2 <=> N2O4
+        // Solve ODE using Euler method with smaller steps for precision, then sample at dt=0.1
+        let no2 = initReactantVal;
+        let n2o4 = initProductVal;
+
+        const sim_dt = 0.01; // fine step for simulation ODE
+        const stepsPerDt = Math.round(dt / sim_dt);
+        
+        // Loop time
+        while (t <= maxTime + 0.01) {
+          trajectoryData.push({
+            time: Math.round(t * 10) / 10,
+            reactant: Math.round(no2 * 100) / 100,
+            product: Math.round(n2o4 * 100) / 100,
+            v_f: CHEMICAL_PARAMS.k_f * no2 * no2,
+            v_r: CHEMICAL_PARAMS.k_r * n2o4,
+            quotient: no2 === 0 ? 999 : n2o4 / (no2 * no2)
+          });
+          
+          // Compute Euler step
+          for (let step = 0; step < stepsPerDt; step++) {
+            const v_f = CHEMICAL_PARAMS.k_f * no2 * no2;
+            const v_r = CHEMICAL_PARAMS.k_r * n2o4;
+            
+            const dNo2 = -2 * v_f + 2 * v_r;
+            const dN2o4 = v_f - v_r;
+            
+            no2 += dNo2 * sim_dt;
+            n2o4 += dN2o4 * sim_dt;
+            
+            // Boundary checks
+            if (no2 < 0) no2 = 0;
+            if (n2o4 < 0) n2o4 = 0;
+          }
+          
+          t += dt;
+        }
+      }
+    }
+
+    // Submit user prediction quiz
+    function submitPrediction(prediction) {
+      if (hasPredicted) return;
+      userPrediction = prediction;
+      hasPredicted = true;
+
+      // Update quiz UI
+      const optionsDiv = document.getElementById('quiz-options');
+      optionsDiv.classList.add('opacity-50', 'pointer-events-none');
+      
+      // Determine correct answer based on initial rates
+      const pt0 = trajectoryData[0];
+      let correctAns = 'already';
+      if (pt0.v_f > pt0.v_r + 0.1) {
+        correctAns = 'forward';
+      } else if (pt0.v_r > pt0.v_f + 0.1) {
+        correctAns = 'reverse';
+      }
+
+      // Show prediction details
+      const resultDiv = document.getElementById('quiz-result');
+      resultDiv.classList.remove('hidden');
+      
+      const badge = document.getElementById('quiz-badge');
+      const userText = document.getElementById('quiz-user-choice');
+      const explanation = document.getElementById('quiz-explanation');
+
+      badge.textContent = "분석 진행 중";
+      badge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-400";
+      
+      const predNames = {
+        'forward': '정반응 우세 예측',
+        'reverse': '역반응 우세 예측',
+        'already': '동적 평형 상태 예측'
+      };
+      userText.textContent = `선택한 예측: ${predNames[prediction]}`;
+      explanation.textContent = "시뮬레이션을 재생하거나 시간 슬라이더를 움직여 평형 상태로 이동시키면 정답 여부가 공개됩니다.";
+
+      // Enable play control
+      document.getElementById('btn-play-pause').classList.remove('opacity-50', 'pointer-events-none');
+      document.getElementById('timeline-scrubber').classList.remove('opacity-50', 'pointer-events-none');
+    }
+
+    // Reset Prediction Quiz state when simulation resets
+    function resetPredictionQuiz() {
+      userPrediction = null;
+      hasPredicted = false;
+      hasCheckedPrediction = false;
+
+      const optionsDiv = document.getElementById('quiz-options');
+      optionsDiv.classList.remove('opacity-50', 'pointer-events-none');
+      
+      const resultDiv = document.getElementById('quiz-result');
+      resultDiv.classList.add('hidden');
+
+      // Set styles on options back to default
+      const optionButtons = optionsDiv.querySelectorAll('button');
+      optionButtons.forEach(btn => {
+        btn.classList.remove('bg-apple-blue', 'bg-apple-green', 'bg-apple-red', 'text-white');
+      });
+
+      // Disable play buttons until prediction is selected (forces educational interaction)
+      // Exception: If mixed state and we've done it already, or just force prediction. Let's make it friendly
+      // User can bypass but it's highly visible. Let's make play disabled until they predict!
+      document.getElementById('btn-play-pause').classList.add('opacity-50', 'pointer-events-none');
+      document.getElementById('timeline-scrubber').classList.add('opacity-50', 'pointer-events-none');
+    }
+
+    // Check prediction accuracy near/at equilibrium
+    function checkPredictionResult(currTime) {
+      if (!hasPredicted || hasCheckedPrediction) return;
+
+      // Determine correct answer based on initial rates
+      const pt0 = trajectoryData[0];
+      let correctAns = 'already';
+      if (pt0.v_f > pt0.v_r + 0.1) {
+        correctAns = 'forward';
+      } else if (pt0.v_r > pt0.v_f + 0.1) {
+        correctAns = 'reverse';
+      }
+
+      // Check if time is past 15 seconds or close to equilibrium
+      if (currTime >= 10.0 || currTime === maxTime) {
+        hasCheckedPrediction = true;
+        const badge = document.getElementById('quiz-badge');
+        const explanation = document.getElementById('quiz-explanation');
+
+        const isCorrect = (userPrediction === correctAns);
+        
+        if (isCorrect) {
+          badge.textContent = "정답";
+          badge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-apple-green bg-opacity-20 text-apple-green border border-apple-green border-opacity-30";
+        } else {
+          badge.textContent = "틀림";
+          badge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-apple-red bg-opacity-20 text-apple-red border border-apple-red border-opacity-30";
+        }
+
+        if (currentTab === 'dynamic') {
+          explanation.innerHTML = `초기 증발 속도(${pt0.v_f.toFixed(1)})가 응축 속도(${pt0.v_r.toFixed(1)})보다 빨라 <strong>정반응 우세(증발 우세)</strong>로 평형이 이동하였습니다.<br>시간이 지나 수증기량이 많아지면서 응축 속도와 증발 속도가 같아지는 <strong>동적 평형</strong>에 이르렀습니다.`;
+        } else {
+          // chemical explanation
+          const Q0 = pt0.quotient;
+          const K = CHEMICAL_PARAMS.K;
+          let relation = "";
+          
+          if (correctAns === 'forward') {
+            relation = `초기 반응 지수 Q(${Q0.toFixed(4)})가 평형 상수 K(${K.toFixed(4)})보다 작으므로(Q < K), 우측으로 평형이 이동(정반응 우세)`;
+          } else if (correctAns === 'reverse') {
+            relation = `초기 반응 지수 Q가 생성물 과다로 평형 상수 K(${K.toFixed(4)})보다 매우 크므로(Q > K), 좌측으로 평형이 이동(역반응 우세)`;
+          } else {
+            relation = `초기 반응 지수 Q가 평형 상수 K와 거의 일치하므로(Q ≈ K), 이미 동적 평형 상태`;
+          }
+          
+          explanation.innerHTML = `<strong>${relation}</strong>를 의미합니다. 시뮬레이션 결과에서 두 속도 곡선이 만나는 시점부터 두 물질의 농도와 용기의 갈색 투명도가 변하지 않음을 알 수 있습니다.`;
+        }
+      }
+    }
+
+    // Chart.js Setup
+    function initChart() {
+      const concCtx = document.getElementById('trendChartConc').getContext('2d');
+      const rateCtx = document.getElementById('trendChartRate').getContext('2d');
+      
+      const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: {
+              color: '#8E8E93',
+              font: { size: 9, family: 'Inter' },
+              boxWidth: 8,
+              padding: 6
+            }
+          },
+          tooltip: { enabled: false }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255, 255, 255, 0.04)', drawTicks: false },
+            ticks: { color: '#8E8E93', font: { size: 8 } }
+          },
+          y: {
+            grid: { color: 'rgba(255, 255, 255, 0.04)', drawTicks: false },
+            ticks: { color: '#8E8E93', font: { size: 8 } }
+          }
+        },
+        elements: {
+          point: { radius: 0 },
+          line: { tension: 0.1, borderWidth: 2 }
+        }
+      };
+
+      const verticalLinePlugin = {
+        id: 'verticalLine',
+        afterDraw: (chart) => {
+          if (chart.tooltip?._active?.length) return;
+          const ctx = chart.ctx;
+          const xAxis = chart.scales.x;
+          const yAxis = chart.scales.y;
+          
+          const index = Math.min(Math.max(0, Math.round(currentTime / dt)), chart.data.labels.length - 1);
+          const xPixel = xAxis.getPixelForValue(chart.data.labels[index]);
+          
+          if (xPixel >= xAxis.left && xPixel <= xAxis.right) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(xPixel, yAxis.top);
+            ctx.lineTo(xPixel, yAxis.bottom);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+      };
+
+      chartConc = new Chart(concCtx, {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: {
+          ...commonOptions,
+          plugins: {
+            ...commonOptions.plugins,
+            title: {
+              display: true,
+              text: '농도 변화 추이',
+              color: '#E5E5EA',
+              font: { size: 10, weight: '500' }
+            }
+          }
+        },
+        plugins: [verticalLinePlugin]
+      });
+
+      chartRate = new Chart(rateCtx, {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: {
+          ...commonOptions,
+          plugins: {
+            ...commonOptions.plugins,
+            title: {
+              display: true,
+              text: '반응 속도 추이',
+              color: '#E5E5EA',
+              font: { size: 10, weight: '500' }
+            }
+          }
+        },
+        plugins: [verticalLinePlugin]
+      });
+
+      updateChartData();
+    }
+
+    function toggleChartType(type) {}
+
+    function updateChartData() {
+      if (!chartConc || !chartRate) return;
+
+      const labels = trajectoryData.map(pt => pt.time.toFixed(1) + 's');
+      let datasetsConc = [];
+      let datasetsRate = [];
+
+      if (currentTab === 'dynamic') {
+        datasetsConc = [
+          {
+            label: '액체 물(W)',
+            data: trajectoryData.map(pt => pt.reactant),
+            borderColor: '#0A84FF',
+            backgroundColor: 'rgba(10, 132, 255, 0.05)',
+            fill: false
+          },
+          {
+            label: '기체 수증기(G)',
+            data: trajectoryData.map(pt => pt.product),
+            borderColor: '#30D158',
+            backgroundColor: 'rgba(48, 209, 88, 0.05)',
+            fill: false
+          }
+        ];
+
+        datasetsRate = [
+          {
+            label: '증발 속도 (정반응)',
+            data: trajectoryData.map(pt => pt.v_f),
+            borderColor: '#0A84FF',
+            fill: false
+          },
+          {
+            label: '응축 속도 (역반응)',
+            data: trajectoryData.map(pt => pt.v_r),
+            borderColor: '#FF453A',
+            fill: false
+          }
+        ];
+      } else {
+        datasetsConc = [
+          {
+            label: 'NO₂ (반응물)',
+            data: trajectoryData.map(pt => pt.reactant),
+            borderColor: '#FF9F0A',
+            backgroundColor: 'rgba(255, 159, 10, 0.05)',
+            fill: false
+          },
+          {
+            label: 'N₂O₄ (생성물)',
+            data: trajectoryData.map(pt => pt.product),
+            borderColor: '#64D2FF',
+            backgroundColor: 'rgba(100, 210, 255, 0.05)',
+            fill: false
+          }
+        ];
+
+        datasetsRate = [
+          {
+            label: '정반응 속도 (v_f)',
+            data: trajectoryData.map(pt => pt.v_f),
+            borderColor: '#0A84FF',
+            fill: false
+          },
+          {
+            label: '역반응 속도 (v_r)',
+            data: trajectoryData.map(pt => pt.v_r),
+            borderColor: '#FF453A',
+            fill: false
+          }
+        ];
+      }
+
+      chartConc.data.labels = labels;
+      chartConc.data.datasets = datasetsConc;
+      chartConc.update();
+
+      chartRate.data.labels = labels;
+      chartRate.data.datasets = datasetsRate;
+      chartRate.update();
+    }
+
+    // Playback Logic
+    function togglePlay() {
+      if (!hasPredicted) {
+        alert("평형 이동 방향 예측 퀴즈의 답을 고르면 시뮬레이션을 재생할 수 있습니다!");
+        return;
+      }
+      
+      isPlaying = !isPlaying;
+      const playIcon = document.getElementById('play-icon');
+      if (isPlaying) {
+        playIcon.setAttribute('data-lucide', 'pause');
+        // Handle when playing finishes, rewind to start
+        if (currentTime >= maxTime) {
+          currentTime = 0;
+          updateDashboard();
+        }
+      } else {
+        playIcon.setAttribute('data-lucide', 'play');
+      }
+      lucide.createIcons();
+    }
+
+    function toggleSpeed() {
+      const speedBtn = document.getElementById('btn-speed');
+      if (playSpeed === 1.0) {
+        playSpeed = 2.0;
+        speedBtn.textContent = '2.0x';
+      } else if (playSpeed === 2.0) {
+        playSpeed = 0.5;
+        speedBtn.textContent = '0.5x';
+      } else {
+        playSpeed = 1.0;
+        speedBtn.textContent = '1.0x';
+      }
+    }
+
+    function resetSimulation() {
+      isPlaying = false;
+      currentTime = 0.0;
+      
+      const playIcon = document.getElementById('play-icon');
+      playIcon.setAttribute('data-lucide', 'play');
+      lucide.createIcons();
+      
+      document.getElementById('timeline-scrubber').value = 0;
+      
+      resetPredictionQuiz();
+      updateDashboard();
+      initParticles();
+    }
+
+    function scrubTime(val) {
+      currentTime = parseFloat(val);
+      updateDashboard();
+      
+      // Pause on scrub
+      if (isPlaying) {
+        isPlaying = false;
+        document.getElementById('play-icon').setAttribute('data-lucide', 'play');
+        lucide.createIcons();
+      }
+    }
+
+    // Fetch nearest precalculated point based on current time
+    function getNearestPoint(time) {
+      const idx = Math.min(
+        Math.max(0, Math.round(time / dt)),
+        trajectoryData.length - 1
+      );
+      return trajectoryData[idx];
+    }
+
+    // Update Dashboard values, graphs vertical bar, check prediction
+    function updateDashboard() {
+      const pt = getNearestPoint(currentTime);
+      
+      // Update text vales
+      document.getElementById('current-time-val').textContent = currentTime.toFixed(1) + 's';
+      document.getElementById('timeline-scrubber').value = currentTime.toFixed(1);
+      
+      // Format reactant and product quantity displays
+      if (currentTab === 'dynamic') {
+        document.getElementById('val-reactant-conc').textContent = Math.round(pt.reactant);
+        document.getElementById('val-product-conc').textContent = Math.round(pt.product);
+        document.getElementById('val-forward-rate').textContent = pt.v_f.toFixed(2);
+        document.getElementById('val-reverse-rate').textContent = pt.v_r.toFixed(2);
+        document.getElementById('status-quotient-box').classList.add('invisible');
+      } else {
+        document.getElementById('val-reactant-conc').textContent = Math.round(pt.reactant);
+        document.getElementById('val-product-conc').textContent = Math.round(pt.product);
+        document.getElementById('val-forward-rate').textContent = pt.v_f.toFixed(2);
+        document.getElementById('val-reverse-rate').textContent = pt.v_r.toFixed(2);
+        document.getElementById('val-reaction-quotient').textContent = `Q = ${pt.quotient > 100 ? '∞' : pt.quotient.toFixed(4)} (K = ${CHEMICAL_PARAMS.K.toFixed(4)})`;
+        document.getElementById('status-quotient-box').classList.remove('invisible');
+
+        // Q vs K comparison badge
+        const qkBadge = document.getElementById('badge-qk-compare');
+        const K = CHEMICAL_PARAMS.K;
+        const Q = pt.quotient;
+        if (Q < K - 0.0005) {
+          qkBadge.textContent = 'Q < K (정반응 우세)';
+          qkBadge.className = 'px-2 py-0.5 rounded-full text-[9px] font-bold bg-apple-blue bg-opacity-20 text-apple-blue border border-apple-blue border-opacity-30';
+        } else if (Q > K + 0.0005) {
+          qkBadge.textContent = 'Q > K (역반응 우세)';
+          qkBadge.className = 'px-2 py-0.5 rounded-full text-[9px] font-bold bg-apple-red bg-opacity-20 text-apple-red border border-apple-red border-opacity-30';
+        } else {
+          qkBadge.textContent = 'Q ≈ K (평형 상태)';
+          qkBadge.className = 'px-2 py-0.5 rounded-full text-[9px] font-bold bg-apple-green bg-opacity-20 text-apple-green border border-apple-green border-opacity-30';
+        }
+      }
+
+      // Rates Bar sync
+      const maxVisualRate = currentTab === 'dynamic' ? 4.0 : 15.0; // scale limit for visual bar
+      const forwardPct = Math.min(100, (pt.v_f / maxVisualRate) * 100);
+      const reversePct = Math.min(100, (pt.v_r / maxVisualRate) * 100);
+      
+      document.getElementById('rate-bar-forward').style.width = `${forwardPct}%`;
+      document.getElementById('rate-bar-reverse').style.width = `${reversePct}%`;
+
+      // Check Equilibrium Status (v_f ≈ v_r within 1.5% margin)
+      const diff = Math.abs(pt.v_f - pt.v_r);
+      const maxRate = Math.max(pt.v_f, pt.v_r);
+      const isEquilibrium = (diff / (maxRate || 1)) < 0.015;
+      
+      const badge = document.getElementById('status-badge');
+      if (isEquilibrium) {
+        badge.className = "px-4 py-2 rounded-2xl bg-apple-green bg-opacity-10 border border-apple-green border-opacity-20 text-apple-green text-xs font-semibold flex items-center gap-1.5 shadow-sm";
+        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-apple-green"></span><span>동적 평형 도달</span>';
+      } else {
+        badge.className = "px-4 py-2 rounded-2xl bg-apple-orange bg-opacity-10 border border-apple-orange border-opacity-20 text-apple-orange text-xs font-semibold flex items-center gap-1.5 shadow-sm";
+        badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-apple-orange animate-ping"></span><span>반응 진행 중</span>';
+      }
+
+      // Check and update quiz results
+      checkPredictionResult(currentTime);
+
+      // Redraw graph markers
+      if (chartConc) {
+        chartConc.update('none');
+      }
+      if (chartRate) {
+        chartRate.update('none');
+      }
+
+      // Chemical background color density sync
+      const overlay = document.getElementById('canvas-overlay');
+      if (currentTab === 'chemical') {
+        // Brown intensity based on NO2 concentration (reactant)
+        // Max reactant is 80
+        const factor = pt.reactant / CHEMICAL_PARAMS.N_total;
+        overlay.style.backgroundColor = 'rgba(139, 69, 19, 0.4)'; // brown shade base
+        overlay.style.opacity = factor * 0.8; // opacity scales with NO2
+      } else {
+        overlay.style.opacity = 0;
+      }
+    }
+
+    // Particle Classes and Simulation Logic
+    class Particle {
+      constructor(type, x, y) {
+        this.type = type; // 'water_l', 'water_g', 'no2', 'n2o4'
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+        this.radius = 4;
+        this.color = '#FFFFFF';
+        this.targetY = null; // for phase transitions
+
+        this.initVisuals();
+      }
+
+      initVisuals() {
+        if (this.type === 'water_l') {
+          this.radius = 3.5;
+          this.color = '#007AFF'; // dynamic blue
+        } else if (this.type === 'water_g') {
+          this.radius = 3.5;
+          this.color = '#64D2FF'; // light blue gas
+          // Higher velocity in gas phase
+          this.vx *= 2.5;
+          this.vy *= 2.5;
+        } else if (this.type === 'no2') {
+          this.radius = 4;
+          this.color = '#FF9F0A'; // brown/orange NO2
+          this.vx *= 3;
+          this.vy *= 3;
+        } else if (this.type === 'n2o4') {
+          this.radius = 7;
+          this.color = '#E5E5EA'; // colorless N2O4 (light gray/cyan outline)
+          this.vx *= 2;
+          this.vy *= 2;
+        }
+      }
+
+      update(width, height) {
+        // Particle motion physics
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // Container boundary restrictions
+        if (currentTab === 'dynamic') {
+          const liquidLevel = height * 0.7;
+          
+          if (this.type === 'water_l') {
+            // Constrained to liquid bottom
+            if (this.x - this.radius < 0 || this.x + this.radius > width) {
+              this.vx *= -1;
+              this.x = Math.max(this.radius, Math.min(width - this.radius, this.x));
+            }
+            if (this.y - this.radius < liquidLevel || this.y + this.radius > height) {
+              this.vy *= -1;
+              this.y = Math.max(liquidLevel + this.radius, Math.min(height - this.radius, this.y));
+            }
+          } else {
+            // Gas: constrained to top vapor chamber
+            if (this.x - this.radius < 0 || this.x + this.radius > width) {
+              this.vx *= -1;
+              this.x = Math.max(this.radius, Math.min(width - this.radius, this.x));
+            }
+            if (this.y - this.radius < 0 || this.y + this.radius > liquidLevel) {
+              this.vy *= -1;
+              this.y = Math.max(this.radius, Math.min(liquidLevel - this.radius, this.y));
+            }
+          }
+        } else {
+          // Chemical: full container bounce
+          if (this.x - this.radius < 0 || this.x + this.radius > width) {
+            this.vx *= -1;
+            this.x = Math.max(this.radius, Math.min(width - this.radius, this.x));
+          }
+          if (this.y - this.radius < 0 || this.y + this.radius > height) {
+            this.vy *= -1;
+            this.y = Math.max(this.radius, Math.min(height - this.radius, this.y));
+          }
+        }
+      }
+
+      draw(canvasCtx) {
+        canvasCtx.beginPath();
+        canvasCtx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        canvasCtx.fillStyle = this.color;
+        
+        if (this.type === 'n2o4') {
+          // Draw N2O4 double molecule structure
+          canvasCtx.shadowBlur = 4;
+          canvasCtx.shadowColor = '#64D2FF';
+          canvasCtx.fill();
+          
+          // Draw two sub-particles visual representation
+          canvasCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+          canvasCtx.lineWidth = 1;
+          canvasCtx.stroke();
+          
+          canvasCtx.beginPath();
+          canvasCtx.arc(this.x - 3, this.y, 3, 0, Math.PI * 2);
+          canvasCtx.fillStyle = '#64D2FF';
+          canvasCtx.fill();
+          
+          canvasCtx.beginPath();
+          canvasCtx.arc(this.x + 3, this.y, 3, 0, Math.PI * 2);
+          canvasCtx.fillStyle = '#64D2FF';
+          canvasCtx.fill();
+          
+          canvasCtx.shadowBlur = 0; // reset
+        } else if (this.type === 'water_g') {
+          canvasCtx.shadowBlur = 6;
+          canvasCtx.shadowColor = '#64D2FF';
+          canvasCtx.fill();
+          canvasCtx.shadowBlur = 0;
+        } else if (this.type === 'no2') {
+          canvasCtx.shadowBlur = 4;
+          canvasCtx.shadowColor = '#FF9F0A';
+          canvasCtx.fill();
+          canvasCtx.shadowBlur = 0;
+        } else {
+          canvasCtx.fill();
+        }
+      }
+    }
+
+    function initParticles() {
+      particles = [];
+      const w = canvas.width || 400;
+      const h = canvas.height || 300;
+      
+      const pt = getNearestPoint(currentTime);
+      const reactantCount = Math.round(pt.reactant);
+      const productCount = Math.round(pt.product);
+
+      if (currentTab === 'dynamic') {
+        // Evaporation: reactant is liquid, product is gas
+        // Spawn water_l
+        for (let i = 0; i < reactantCount; i++) {
+          const rx = Math.random() * w;
+          const ry = h * 0.7 + Math.random() * (h * 0.3);
+          particles.push(new Particle('water_l', rx, ry));
+        }
+        // Spawn water_g
+        for (let i = 0; i < productCount; i++) {
+          const rx = Math.random() * w;
+          const ry = Math.random() * (h * 0.7);
+          particles.push(new Particle('water_g', rx, ry));
+        }
+      } else {
+        // Chemical: reactant is NO2 (orange), product is N2O4 (grey/double blue)
+        // Spawn NO2
+        for (let i = 0; i < reactantCount; i++) {
+          const rx = Math.random() * w;
+          const ry = Math.random() * h;
+          particles.push(new Particle('no2', rx, ry));
+        }
+        // Spawn N2O4
+        for (let i = 0; i < productCount; i++) {
+          const rx = Math.random() * w;
+          const ry = Math.random() * h;
+          particles.push(new Particle('n2o4', rx, ry));
+        }
+      }
+    }
+
+    // Sync current particle counts to mathematical target values in real time
+    function syncParticlesWithTarget(targetReactant, targetProduct) {
+      const w = canvas.width || 400;
+      const h = canvas.height || 300;
+
+      if (currentTab === 'dynamic') {
+        const currentLiquids = particles.filter(p => p.type === 'water_l');
+        const currentGases = particles.filter(p => p.type === 'water_g');
+
+        // Adjust Water Liquid (Reactant)
+        if (currentLiquids.length < targetReactant) {
+          const diff = targetReactant - currentLiquids.length;
+          for (let i = 0; i < diff; i++) {
+            particles.push(new Particle('water_l', Math.random() * w, h * 0.7 + Math.random() * (h * 0.3)));
+          }
+        } else if (currentLiquids.length > targetReactant) {
+          const diff = currentLiquids.length - targetReactant;
+          let removed = 0;
+          particles = particles.filter(p => {
+            if (p.type === 'water_l' && removed < diff) {
+              removed++;
+              return false;
+            }
+            return true;
+          });
+        }
+
+        // Adjust Water Gas (Product)
+        if (currentGases.length < targetProduct) {
+          const diff = targetProduct - currentGases.length;
+          for (let i = 0; i < diff; i++) {
+            // Evaporate a water_l particle and turn it into water_g!
+            // Or just spawn near the water surface
+            particles.push(new Particle('water_g', Math.random() * w, h * 0.7 - 5));
+          }
+        } else if (currentGases.length > targetProduct) {
+          const diff = currentGases.length - targetProduct;
+          let removed = 0;
+          particles = particles.filter(p => {
+            if (p.type === 'water_g' && removed < diff) {
+              removed++;
+              return false;
+            }
+            return true;
+          });
+        }
+      } else {
+        const currentNo2 = particles.filter(p => p.type === 'no2');
+        const currentN2o4 = particles.filter(p => p.type === 'n2o4');
+
+        // Adjust NO2 (Reactant)
+        if (currentNo2.length < targetReactant) {
+          const diff = targetReactant - currentNo2.length;
+          for (let i = 0; i < diff; i++) {
+            particles.push(new Particle('no2', Math.random() * w, Math.random() * h));
+          }
+        } else if (currentNo2.length > targetReactant) {
+          const diff = currentNo2.length - targetReactant;
+          let removed = 0;
+          particles = particles.filter(p => {
+            if (p.type === 'no2' && removed < diff) {
+              removed++;
+              return false;
+            }
+            return true;
+          });
+        }
+
+        // Adjust N2O4 (Product)
+        if (currentN2o4.length < targetProduct) {
+          const diff = targetProduct - currentN2o4.length;
+          for (let i = 0; i < diff; i++) {
+            particles.push(new Particle('n2o4', Math.random() * w, Math.random() * h));
+          }
+        } else if (currentN2o4.length > targetProduct) {
+          const diff = currentN2o4.length - targetProduct;
+          let removed = 0;
+          particles = particles.filter(p => {
+            if (p.type === 'n2o4' && removed < diff) {
+              removed++;
+              return false;
+            }
+            return true;
+          });
+        }
+      }
+    }
+
+    // Micro-reactions happening dynamically on collisions even when paused
+    function processMicroInteractions() {
+      // 1. Dynamic: Evaporation/Condensation particles micro transitions
+      // Randomly change a water liquid particle at the top of the layer to gas
+      // and gas colliding with bottom layer to water liquid
+      // (This maintains realistic microscopic reactions even at equilibrium)
+      const h = canvas.height || 300;
+      const liquidLevel = h * 0.7;
+
+      if (currentTab === 'dynamic') {
+        particles.forEach(p => {
+          if (p.type === 'water_g' && p.y > liquidLevel - 5) {
+            // Collision with liquid boundary: absorb/condense
+            p.type = 'water_l';
+            p.vx = (Math.random() - 0.5) * 1.5;
+            p.vy = Math.random() * 1.5; // push down
+            p.color = '#007AFF';
+            p.radius = 3.5;
+          }
+          if (p.type === 'water_l' && p.y < liquidLevel + 5 && Math.random() < 0.002) {
+            // Random escape/evaporation at boundary
+            p.type = 'water_g';
+            p.vx = (Math.random() - 0.5) * 5;
+            p.vy = -Math.random() * 5; // launch up
+            p.color = '#64D2FF';
+            p.radius = 3.5;
+          }
+        });
+      } else {
+        // 2. Chemical: NO2 particle merges, N2O4 splits
+        // Split N2O4 with low probability
+        let newNo2s = [];
+        particles = particles.filter(p => {
+          if (p.type === 'n2o4' && Math.random() < 0.003) {
+            // split into 2 NO2
+            newNo2s.push(new Particle('no2', p.x - 5, p.y));
+            newNo2s.push(new Particle('no2', p.x + 5, p.y));
+            return false; // remove N2O4
+          }
+          return true;
+        });
+        particles.push(...newNo2s);
+
+        // Merge NO2 on collision
+        const no2Particles = particles.filter(p => p.type === 'no2');
+        for (let i = 0; i < no2Particles.length; i++) {
+          for (let j = i + 1; j < no2Particles.length; j++) {
+            const p1 = no2Particles[i];
+            const p2 = no2Particles[j];
+            
+            // Check distance
+            const dx = p1.x - p2.x;
+            const dy = p1.y - p2.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < 10 && Math.random() < 0.05) {
+              // Merge into N2O4
+              // remove p1, p2 from particles and insert one N2O4
+              particles = particles.filter(p => p !== p1 && p !== p2);
+              particles.push(new Particle('n2o4', (p1.x + p2.x)/2, (p1.y + p2.y)/2));
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Main particle updates and render loop
+    function particleLoop() {
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // Draw container liquid line if in dynamic tab
+      if (currentTab === 'dynamic') {
+        const liquidLevel = h * 0.7;
+        // Liquid body (Water bottom)
+        ctx.fillStyle = 'rgba(10, 132, 255, 0.15)';
+        ctx.fillRect(0, liquidLevel, w, h * 0.3);
+        
+        // Border/Surface line
+        ctx.beginPath();
+        ctx.moveTo(0, liquidLevel);
+        ctx.lineTo(w, liquidLevel);
+        ctx.strokeStyle = 'rgba(10, 132, 255, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Check current time integration when playing
+      if (isPlaying) {
+        // Increase time based on speed
+        currentTime += dt * playSpeed * 0.15; // frame speed scale
+        if (currentTime >= maxTime) {
+          currentTime = maxTime;
+          isPlaying = false;
+          document.getElementById('play-icon').setAttribute('data-lucide', 'play');
+          lucide.createIcons();
+        }
+        updateDashboard();
+      }
+
+      // Get target particle distributions from math ODE data
+      const pt = getNearestPoint(currentTime);
+      const targetReactant = Math.round(pt.reactant);
+      const targetProduct = Math.round(pt.product);
+
+      // Re-sync particle pools to match exact concentration targets
+      syncParticlesWithTarget(targetReactant, targetProduct);
+
+      // Process micro interactions (bounces/exchanges)
+      processMicroInteractions();
+
+      // Render and update all particles
+      particles.forEach(p => {
+        p.update(w, h);
+        p.draw(ctx);
+      });
+
+      requestAnimationFrame(particleLoop);
+    }
+  </script>
+</body>
+</html>
